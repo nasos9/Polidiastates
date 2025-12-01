@@ -1,1 +1,3 @@
 # Polidiastates
+
+pip intall openpyxl
