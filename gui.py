@@ -1,19 +1,41 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from quadtree2 import movies_octree_main
+from rangeTree import range_tree_main
+from rTree import r_tree_main
 import threading
 
 class MovieSearchGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Quadtree Search GUI")
+        self.root.title("Multidimensional structures GUI")
         self.root.geometry("1200x750")
         self.root.configure(bg='#f5f5f5')
         
         # Main container
         main_container = ttk.Frame(root)
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
+
+        # Tree selection
+        tree_method_container = ttk.Frame(main_container)
+        tree_method_container.pack(fill=tk.X, pady=10)
+
+        ttk.Label(tree_method_container, text="Select Tree Structure:", font=('Arial', 11, 'bold')).pack(side=tk.LEFT,
+                                                                                                         padx=5)
+
+        self.tree_method_var = tk.StringVar()
+        self.tree_method_dropdown = ttk.Combobox(
+            tree_method_container,
+            textvariable=self.tree_method_var,
+            state="readonly",
+            width=20,
+            values=["K-D Tree", "Quad Tree", "Range Tree", "R-Tree"]
+        )
+        self.tree_method_dropdown.current(2)  # Default = Range Tree
+        self.tree_method_dropdown.pack(side=tk.LEFT, padx=10)
+
+        # Top section: Input form
+        form_frame = ttk.LabelFrame(main_container, text="Select attributes (0-4)", padding=15)
+        form_frame.pack(fill=tk.X, padx=5, pady=5)
         # Top section: Input form
         form_frame = ttk.LabelFrame(main_container, text="Select attributes (0-4)", padding=15)
         form_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -81,7 +103,7 @@ class MovieSearchGUI:
         self.genre_keywords_label = ttk.Label(self.genre_frame, text="Keywords:")
         self.genre_keywords = ttk.Entry(self.genre_frame, width=25)
         self.neighbors_label = ttk.Label(self.genre_frame, text="Number of Results:")
-        self.neighbors_entry = ttk.Entry(self.genre_frame, width=10)
+        self.number_of_results_entry = ttk.Entry(self.genre_frame, width=10)
         
         # Info text
         info_text = ttk.Label(form_frame, 
@@ -191,7 +213,7 @@ class MovieSearchGUI:
             self.genre_keywords_label.pack(side=tk.LEFT, padx=5)
             self.genre_keywords.pack(side=tk.LEFT, padx=5)
             self.neighbors_label.pack(side=tk.LEFT, padx=10)
-            self.neighbors_entry.pack(side=tk.LEFT, padx=5)
+            self.number_of_results_entry.pack(side=tk.LEFT, padx=5)
         else:
             self.genre_frame.pack_forget()
     
@@ -213,59 +235,73 @@ class MovieSearchGUI:
         thread = threading.Thread(target=self.run_search)
         thread.daemon = True
         thread.start()
-    
+
     def run_search(self):
         """Run the actual search"""
-        try:
-            conditions = {}
-            
-            # Budget condition
-            if self.budget_var.get():
-                budget_min = float(self.budget_min.get()) if self.budget_min.get() else 0
-                budget_max = float(self.budget_max.get()) if self.budget_max.get() else 999999999
-                conditions['budget'] = (budget_min, budget_max)
-            else:
-                conditions['budget'] = (0, 999999999)
-            
-            # Popularity condition
-            if self.popularity_var.get():
-                pop_min = float(self.popularity_min.get()) if self.popularity_min.get() else 0
-                pop_max = float(self.popularity_max.get()) if self.popularity_max.get() else 999999
-                conditions['popularity'] = (pop_min, pop_max)
-            else:
-                conditions['popularity'] = (0, 999999)
-            
-            # Date condition
-            if self.date_var.get():
-                date_min = self.date_min.get() if self.date_min.get() else '1900-01-01'
-                date_max = self.date_max.get() if self.date_max.get() else '2030-12-31'
-                conditions['release_date'] = (date_min, date_max)
-            else:
-                conditions['release_date'] = ('1900-01-01', '2030-12-31')
-            
-            # Genre keywords
-            genre_kw = None
-            num_neighbors = None
-            if self.genre_var.get():
-                genre_kw_raw = self.genre_keywords.get().strip()
-                if genre_kw_raw:
-                    genre_kw = genre_kw_raw.replace(",", " ")
-                    num_neighbors = int(self.neighbors_entry.get()) if self.neighbors_entry.get() else None
-            
-            # Call search function
-            results = movies_octree_main(
-                conditions=conditions,
-                genre_keywords=genre_kw if genre_kw else None,
-                num_neighbors=num_neighbors,
-                max_rows=None  # Use entire dataset
-            )
-            
-            # Display results in GUI thread
-            self.root.after(0, lambda: self.display_results(results))
-            
-        except Exception as e:
-            self.root.after(0, lambda: self.show_error(str(e)))
-    
+
+        conditions = {}
+        # Budget condition
+        if self.budget_var.get():
+            budget_min = float(self.budget_min.get()) if self.budget_min.get() else 0
+            budget_max = float(self.budget_max.get()) if self.budget_max.get() else 999999999
+            conditions['budget'] = (budget_min, budget_max)
+        else:
+            conditions['budget'] = (0, 999999999)
+
+        # Popularity condition
+        if self.popularity_var.get():
+            pop_min = float(self.popularity_min.get()) if self.popularity_min.get() else 0
+            pop_max = float(self.popularity_max.get()) if self.popularity_max.get() else 999999
+            conditions['popularity'] = (pop_min, pop_max)
+        else:
+            conditions['popularity'] = (0, 999999)
+
+        # Date condition
+        if self.date_var.get():
+            date_min = self.date_min.get() if self.date_min.get() else '1900-01-01'
+            date_max = self.date_max.get() if self.date_max.get() else '2030-12-31'
+            conditions['release_date'] = (date_min, date_max)
+        else:
+            conditions['release_date'] = ('1900-01-01', '2030-12-31')
+
+        # Genre keywords
+        genre_kw = None
+        num_of_results = None
+        if self.genre_var.get():
+            genre_kw_raw = self.genre_keywords.get().strip()
+            if genre_kw_raw:
+                genre_kw = genre_kw_raw.replace(",", " ")
+                num_of_results = int(self.number_of_results_entry.get()) if self.number_of_results_entry.get() else None
+
+        # Call search function
+        tree_choice = self.tree_method_var.get()
+
+        if tree_choice == "Range Tree":
+            results = range_tree_main(conditions, genre_kw, num_of_results)
+        #     dates kai dhmioyrgeia dentrou
+
+        # elif tree_choice == "Quad Tree":
+        #     results = quad_tree_main(
+        #         conditions=conditions,
+        #         genre_keywords=genre_kw,
+        #         num_neighbors=num_neighbors,
+        #         max_rows=None
+        #     )
+        # elif tree_choice == "K-D Tree":
+        #     results = kd_main(
+        #         conditions=conditions,
+        #         genre_keywords=genre_kw,
+        #         num_neighbors=num_neighbors,
+        #         max_rows=None
+        #     )
+        #
+        elif tree_choice == "R-Tree":
+            results = r_tree_main(conditions, genre_kw, num_of_results)
+        else:
+            raise ValueError("No tree structure selected.")
+        # Display results in GUI thread
+        self.root.after(0, lambda: self.display_results(results))
+
     def display_results(self, results):
         """Display search results in the table"""
         # Clear existing items

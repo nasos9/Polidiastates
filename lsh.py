@@ -1,57 +1,79 @@
-import ast
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.neighbors import NearestNeighbors
+import random
 
+import mmh3
+from collections import defaultdict
 
-def lsh_query(words, N, filtered_results, genre_index):
-    """
-    Perform LSH-based search for reviews containing the specified keywords.
-    :param words: List of words to search for in reviews.
-    :param N: Number of nearest neighbors to return.
-    :param filtered_results: List of rows from the dataset (filtered by Octree and categorical conditions).
-    :param genre_index: Index of the 'genre_names' column in the dataset.
-    :return: List of tuples containing the matching rows and their cosine similarities.
-    """
-    if not words or N <= 0 or not filtered_results:
-        return []
+K = 3                      # shingle size
+NUM_HASHES = 100          # number of minhash functions
+P = 2**61 - 1             # large prime
+HASH_FUNCS = []           # will be initialized once
+RANDOM_SEED = 1093509     # fixed seed for reproducibility
+NUM_BANDS = 25            # number of bands
+NUM_ROWS = 4              # number of rows
 
-    # Extract genres from the filtered results
-    genres_to_hash = []
-    for res in filtered_results:
-        raw = res[genre_index]
-        try:
-            genres = ast.literal_eval(raw)
-        except:
-            # fallback: remove brackets/quotes and split by comma
-            genres = str(raw).replace("[", "").replace("]", "").replace("'", "").replace('"', "").split(",")
-        
-        # clean, lowercase, join into space-separated string
-        genres_clean = " ".join([g.strip().lower() for g in genres if g.strip()])
-        genres_to_hash.append(genres_clean if genres_clean else "unknown")
+def get_hash(s):
+    return mmh3.hash(str(s)) & 0xffffffff  # 0xffffffff makes it unsigned (bitmask)
 
-    # Vectorize the genres
-    vectorizer = CountVectorizer(stop_words='english', binary=True)
-    try:
-        genre_vectors = vectorizer.fit_transform(genres_to_hash)
-    except:
-        # If all genres are empty, return empty results
-        return []
+def init_hash_functions():
+    global HASH_FUNCS
+    random.seed(RANDOM_SEED)
+    HASH_FUNCS = [(random.randint(1, P - 1), random.randint(0, P - 1), P) for _ in range(NUM_HASHES)]
 
-    # Fit the NearestNeighbors model
-    n_neighbors = min(N, len(genres_to_hash))
-    nn_model = NearestNeighbors(n_neighbors=n_neighbors, metric='cosine', algorithm='brute')
-    nn_model.fit(genre_vectors)
+def get_shingles(word):
+    return {word[i:i+K] for i in range(len(word) - K + 1)}
 
-    # Transform the query words into a vector
-    query_vector = vectorizer.transform([" ".join([w.lower() for w in words])])
+def minhash_signature(shingles):
+    sig = []
+    for (a, b, p) in HASH_FUNCS:
+        min_hash = min((a * get_hash(shingle) + b) % p for shingle in shingles)
+        sig.append(min_hash)
+    return tuple(sig)
 
-    # Perform the nearest neighbors search
-    distances, indices = nn_model.kneighbors(query_vector, n_neighbors=n_neighbors)
+def create_buckets(signatures):
+    buckets = defaultdict(list)
+    for key, signature in signatures.items():
+        for b in range(NUM_BANDS):
+            start = b * NUM_ROWS
+            band = tuple(signature[start:start + NUM_ROWS])
+            buckets[(b, get_hash(band))].append(key)
 
-    # Collect results with cosine similarity (1 - distance)
-    results = [
-        (filtered_results[idx], 1 - distances[0][i])
-        for i, idx in enumerate(indices[0])
-    ]
+    return buckets
 
-    return results
+def lsh(dataframe):
+
+    if not HASH_FUNCS:
+        init_hash_functions()
+
+    # SHINGLING
+    shingle_sets = {}
+    for index, row in dataframe.iterrows():
+        shingles = get_shingles(row["genre_names_cleaned"])
+        if shingles:
+            shingle_sets[row["id"]] = shingles
+
+    # MINHASH
+    signatures = {
+        movie_id: minhash_signature(shingle_set)
+        for movie_id, shingle_set in shingle_sets.items()
+    }
+
+    # LSH
+    buckets = create_buckets(signatures)
+    return buckets
+
+def lsh_query(buckets, keyword):
+
+    keyword_shingles = get_shingles(keyword)
+    keyword_signature = minhash_signature(keyword_shingles)
+    candidates = set()
+
+    for i in range(NUM_BANDS):
+        start = i * NUM_ROWS
+        band = tuple(keyword_signature[start:start + NUM_ROWS])
+        bucket_key = (i, get_hash(band))
+
+        if bucket_key in buckets:
+            for movie_id in buckets[bucket_key]:
+                candidates.add(movie_id)
+
+    return candidates

@@ -292,7 +292,9 @@ class Rtree():
 import pandas as pd
 import time
 from datetime import datetime
+import lsh
 import argparse
+import ast
 
 # utility
 parser = argparse.ArgumentParser()
@@ -301,7 +303,7 @@ parser.add_argument('--rows', type=int, help="Number of dataset rows to use")
 args = parser.parse_args()
 
 VERBOSE = args.verbose
-NROWS = args.rows
+NROWS = 10000#args.rows
 
 def read_csv_data(filename: str, nrows: int) -> pd.DataFrame:
     try:
@@ -311,9 +313,8 @@ def read_csv_data(filename: str, nrows: int) -> pd.DataFrame:
     except Exception as e:
         print(f"Error loading file: {e}")
         
-    
-def construct_rtree(data: pd.DataFrame) -> Rtree:
-    tree = Rtree(m=2, M=5, dim=3)
+def construct_rtree(data: pd.DataFrame, dimentions: int) -> Rtree:
+    tree = Rtree(m=2, M=5, dim=dimentions)
     
     for _, row in data.iterrows():
         # skip NaNs
@@ -342,6 +343,13 @@ def convert_date_to_numeric(date_str):
     except:
         return 0 # Default για λάθη
     
+def numeric_to_date(numeric_date):
+    s = str(numeric_date)  # convert to string
+    year = s[:4]
+    month = s[4:6]
+    day = s[6:8]
+    return f"{year}-{month}-{day}"
+    
 def linear_search(data: pd.DataFrame, min_values, max_values):
     res = []
     for _, row in data.iterrows():
@@ -365,8 +373,7 @@ def validate_results(data, search_mins, search_maxs, results):
     else:
         print('Wrong results!')
         
-
-def main():
+def r_tree_main(conditions: dict, genre_kw, num_of_results):
     start_time = time.time()
     
     # read and format(date) data
@@ -383,7 +390,7 @@ def main():
 
     # insert data / construct tree
     print(f"\nInserting {len(data)} records into R-tree")
-    rtree = construct_rtree(data)
+    rtree = construct_rtree(data, len(conditions))
     construct_time = time.time()
     print(f"Done! Inserting data took: {construct_time - read_time:.2f}s")
     
@@ -392,22 +399,37 @@ def main():
     # release date:  yyyy-mm-dd
     # budget      :  usd
     
-    search_mins = [1, 19000101, 100] 
-    search_maxs = [50, 20251231, 10000]
+    search_mins = [conditions['popularity'][0], convert_date_to_numeric(conditions['release_date'][0]), conditions['budget'][0]] 
+    search_maxs = [conditions['popularity'][1], convert_date_to_numeric(conditions['release_date'][1]), conditions['budget'][1]]
     search_rect = MBR(search_mins, search_maxs)
     
     print(f"\nSearching for popularity=[{search_mins[0]}, {search_maxs[0]}], release_date=[{datetime.strptime(str(search_mins[1]), "%Y%m%d").strftime("%Y-%m-%d")}, {datetime.strptime(str(search_maxs[1]), "%Y%m%d").strftime("%Y-%m-%d")}], budget=[{search_mins[2]}, {search_maxs[2]}]")
-    results = rtree.search(search_rect)
+    results = pd.DataFrame(rtree.search(search_rect))
     search_time = time.time()
     print(f"Done! Searching took: {search_time - construct_time:.6f}s")
-    
     print(f"Found {len(results)} matches")
     if VERBOSE:
         for res in results:
             print(f" - {res['title']} (popularity: {res['popularity']}, release_date: {datetime.strptime(str(res['release_date']), "%Y%m%d").strftime("%Y-%m-%d")}, budget: {res['budget']}")
         
-    print('\nValidating results')
-    validate_results(data, search_mins, search_maxs, results)
+    # print('\nValidating results')
+    # validate_results(data, search_mins, search_maxs, results)
+    
+    results['release_date'] = results['release_date'].apply(numeric_to_date)
+    
+    # perform lsh only if there is a genre keyword
+    if genre_kw:
+        results['genre_names'] = results['genre_names'].apply(ast.literal_eval)  # cast to a list
+        results['genre_names_cleaned'] = results['genre_names'].apply(lambda x: " ".join(x).lower())
+
+        buckets = lsh.lsh(results)
+        candidates = lsh.lsh_query(buckets, genre_kw)
+
+        filtered_movies = results[results["id"].isin(candidates)].head(num_of_results)
+        results = filtered_movies.values.tolist()
+        return results
+    else:
+        return results.values.tolist()
 
 if __name__ == "__main__":
-    main()
+    r_tree_main()
