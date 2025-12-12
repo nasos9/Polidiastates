@@ -303,11 +303,11 @@ args = parser.parse_args()
 VERBOSE = args.verbose
 NROWS = args.rows
 
-def read_xlsx_data(filename: str, nrows: int) -> pd.DataFrame:
+def read_csv_data(filename: str, nrows: int) -> pd.DataFrame:
     try:
-        print("Reading xlsx Data")
+        print("Reading csv Data")
                                             # if nrows has been given then set it else set to None(read all rows)
-        return pd.read_excel(filename, nrows=(nrows if not None else None))
+        return pd.read_csv(filename, nrows=(nrows if not None else None))
     except Exception as e:
         print(f"Error loading file: {e}")
         
@@ -370,7 +370,7 @@ def main():
     start_time = time.time()
     
     # read and format(date) data
-    data = read_xlsx_data('data_movies_clean.xlsx', NROWS)
+    data = read_csv_data('data_movies_clean.csv', NROWS)
     data['release_date'] = data['release_date'].apply(convert_date_to_numeric)
     
     if VERBOSE:    
