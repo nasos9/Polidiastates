@@ -3,6 +3,12 @@ import random
 import mmh3
 from collections import defaultdict
 
+"""
+Increase bands and decrease rows to have matches that are more exact -> Fewer candidates -> stricter results ->
+                                                                       ->(documentary,music will not be found with keyword = documentary).
+More candidates -> loose choice but -> more false positives and computation
+"""
+
 K = 3                      # shingle size
 NUM_HASHES = 100          # number of minhash functions
 P = 2**61 - 1             # large prime

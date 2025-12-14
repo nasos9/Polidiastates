@@ -158,7 +158,7 @@ def range_tree_main(conditions, genre_kw, num_of_results):
     conditions["release_date"] = tuple(convert_date_to_numeric(date) for date in conditions["release_date"])
     dimensions = list(conditions.keys())
 
-    movies = pd.read_csv("data_movies_clean.csv", nrows=10000)
+    movies = pd.read_csv("movies_testing.csv")
     movies['release_date'] = movies['release_date'].apply(convert_date_to_numeric)
 
     movies = movies.to_dict(orient="records")
@@ -181,4 +181,3 @@ def range_tree_main(conditions, genre_kw, num_of_results):
         results = search_results_df.values.tolist()
 
     return results
-
