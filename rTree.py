@@ -309,7 +309,7 @@ parser.add_argument('--rows', type=int, help="Number of dataset rows to use")
 args = parser.parse_args()
 
 VERBOSE = args.verbose
-NROWS = 10000  # args.rows
+NROWS = None  # args.rows
 
 
 def read_csv_data(filename: str, nrows: int) -> pd.DataFrame:

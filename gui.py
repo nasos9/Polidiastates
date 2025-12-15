@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
 
+# Keep imports exactly as they were
 from rangeTree import range_tree_main
 from kdtree import kdtree_main
 from quadtree2 import movies_octree_main
@@ -10,225 +11,254 @@ from rTree import r_tree_main
 class MovieSearchGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Multidimensional structures GUI")
-        self.root.geometry("1200x750")
-        self.root.configure(bg='#f5f5f5')
+        self.root.title("Multidimensional Structures GUI")
+        self.root.geometry("1200x900")
+        
+        # --- THEME CONFIGURATION ---
+        self.colors = {
+            "bg": "#ffffff",
+            "fg": "#1D2575",
+            "accent": "#2c3e50",
+            "highlight": "#2c3e50",
+            "light_gray": "#f8f9fa"
+        }
+        
+        self.root.configure(bg=self.colors["bg"])
+        
+        # Configure Styles
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        
+        # General Styles
+        self.style.configure("TFrame", background=self.colors["bg"])
+        self.style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["fg"], font=("Segoe UI", 10))
+        self.style.configure("TButton", font=("Segoe UI", 10), padding=6)
+        self.style.configure("TCheckbutton", background=self.colors["bg"], font=("Segoe UI", 10, "bold"))
+        self.style.configure("TLabelframe", background=self.colors["bg"], relief="flat")
+        self.style.configure("TLabelframe.Label", background=self.colors["bg"], foreground=self.colors["accent"], font=("Segoe UI", 11, "bold"))
+        
+        # Input Styles
+        self.style.configure("Card.TFrame", background=self.colors["light_gray"], relief="flat")
+        
+        # Header Style for Treeview
+        self.style.configure("Treeview.Heading", 
+                             background=self.colors["accent"], 
+                             foreground="white", 
+                             font=("Segoe UI", 10, "bold"),
+                             relief="flat")
+        self.style.map("Treeview.Heading", background=[('active', self.colors["accent"])])
+        
+        self.style.configure("Treeview", 
+                             font=("Segoe UI", 10),
+                             rowheight=30,
+                             fieldbackground="white",
+                             borderwidth=0)
 
-        # Main container
+        # --- MAIN CONTAINER ---
         main_container = ttk.Frame(root)
-        main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=25, pady=20)
 
-        # Tree selection
-        tree_method_container = ttk.Frame(main_container)
-        tree_method_container.pack(fill=tk.X, pady=10)
+        # --- HEADER / TREE SELECTION ---
+        header_frame = ttk.Frame(main_container)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
 
-        ttk.Label(tree_method_container, text="Select Tree Structure:", font=('Arial', 11, 'bold')).pack(side=tk.LEFT,
-                                                                                                         padx=5)
-
+        ttk.Label(header_frame, text="Select Tree Structure", font=("Segoe UI", 12, "bold"), foreground=self.colors["accent"]).pack(anchor=tk.CENTER)
+        
         self.tree_method_var = tk.StringVar()
         self.tree_method_dropdown = ttk.Combobox(
-            tree_method_container,
+            header_frame,
             textvariable=self.tree_method_var,
             state="readonly",
-            width=20,
-            values=["K-D Tree", "Quad Tree", "Range Tree", "R-Tree"]
+            width=30,
+            values=["K-D Tree", "Quad Tree", "Range Tree", "R-Tree"],
+            font=("Segoe UI", 10)
         )
         self.tree_method_dropdown.current(2)  # Default = Range Tree
-        self.tree_method_dropdown.pack(side=tk.LEFT, padx=10)
+        self.tree_method_dropdown.pack(anchor=tk.CENTER, pady=5)
 
-        # Top section: Input form
-        form_frame = ttk.LabelFrame(main_container, text="Select attributes (0-4)", padding=15)
-        form_frame.pack(fill=tk.X, padx=5, pady=5)
-        # Top section: Input form
-        form_frame = ttk.LabelFrame(main_container, text="Select attributes (0-4)", padding=15)
-        form_frame.pack(fill=tk.X, padx=5, pady=5)
+        # --- FILTER SECTION (2x2 Grid) ---
+        # We use a container with a subtle background to group filters
+        filter_container = ttk.LabelFrame(main_container, text="  Search Filters  ", padding=15)
+        filter_container.pack(fill=tk.X, pady=10)
 
-        # ===== CHECKBOXES AND INPUT FIELDS =====
+        # Configure grid weights for symmetry
+        filter_container.columnconfigure(0, weight=1)
+        filter_container.columnconfigure(1, weight=1)
 
-        # Budget
-        budget_container = ttk.Frame(form_frame)
-        budget_container.pack(fill=tk.X, pady=5)
+        # 1. Budget (Row 0, Col 0)
+        self.create_filter_card(filter_container, "Budget", 0, 0)
+        
+        # 2. Popularity (Row 0, Col 1)
+        self.create_filter_card(filter_container, "Popularity", 0, 1)
+        
+        # 3. Release Date (Row 1, Col 0)
+        self.create_filter_card(filter_container, "Release Date", 1, 0)
+        
+        # 4. Genre (Row 1, Col 1)
+        self.create_filter_card(filter_container, "Genre", 1, 1)
 
-        self.budget_var = tk.BooleanVar(value=False)
-        budget_check = ttk.Checkbutton(budget_container, text="budget", variable=self.budget_var,
-                                       command=self.toggle_budget)
-        budget_check.pack(side=tk.LEFT, padx=5)
+        # --- INFO TEXT & SEARCH BUTTON ---
+        action_frame = ttk.Frame(main_container)
+        action_frame.pack(fill=tk.X, pady=15)
 
-        self.budget_frame = ttk.Frame(budget_container)
-        self.budget_from_label = ttk.Label(self.budget_frame, text="από")
-        self.budget_min = ttk.Entry(self.budget_frame, width=15)
-        self.budget_to_label = ttk.Label(self.budget_frame, text="έως")
-        self.budget_max = ttk.Entry(self.budget_frame, width=15)
+        info_text = ttk.Label(action_frame, 
+                             text="Enter Min/Max for numeric values. Dates: YYYY-MM-DD. Separate genres with spaces.",
+                             foreground="#7f8c8d", font=("Segoe UI", 9, "italic"))
+        info_text.pack(side=tk.TOP, pady=(0, 10))
 
-        # Popularity
-        popularity_container = ttk.Frame(form_frame)
-        popularity_container.pack(fill=tk.X, pady=5)
+        self.search_btn = tk.Button(action_frame, text="SEARCH MOVIES", command=self.search_movies,
+                                   bg=self.colors["highlight"], fg='white',
+                                   font=('Segoe UI', 11, 'bold'),
+                                   relief="flat", cursor='hand2', 
+                                   padx=40, pady=10)
+        self.search_btn.pack(side=tk.TOP)
 
-        self.popularity_var = tk.BooleanVar(value=False)
-        popularity_check = ttk.Checkbutton(popularity_container, text="popularity",
-                                          variable=self.popularity_var,
-                                          command=self.toggle_popularity)
-        popularity_check.pack(side=tk.LEFT, padx=5)
-
-        self.popularity_frame = ttk.Frame(popularity_container)
-        self.popularity_from_label = ttk.Label(self.popularity_frame, text="από")
-        self.popularity_min = ttk.Entry(self.popularity_frame, width=15)
-        self.popularity_to_label = ttk.Label(self.popularity_frame, text="έως")
-        self.popularity_max = ttk.Entry(self.popularity_frame, width=15)
-
-        # Release Date
-        date_container = ttk.Frame(form_frame)
-        date_container.pack(fill=tk.X, pady=5)
-
-        self.date_var = tk.BooleanVar(value=False)
-        date_check = ttk.Checkbutton(date_container, text="release_date",
-                                     variable=self.date_var,
-                                     command=self.toggle_date)
-        date_check.pack(side=tk.LEFT, padx=5)
-
-        self.date_frame = ttk.Frame(date_container)
-        self.date_from_label = ttk.Label(self.date_frame, text="από")
-        self.date_min = ttk.Entry(self.date_frame, width=15)
-        self.date_to_label = ttk.Label(self.date_frame, text="έως")
-        self.date_max = ttk.Entry(self.date_frame, width=15)
-
-        # Genre Keywords
-        genre_container = ttk.Frame(form_frame)
-        genre_container.pack(fill=tk.X, pady=5)
-
-        self.genre_var = tk.BooleanVar(value=False)
-        genre_check = ttk.Checkbutton(genre_container, text="genre",
-                                      variable=self.genre_var,
-                                      command=self.toggle_genre)
-        genre_check.pack(side=tk.LEFT, padx=5)
-
-        self.genre_frame = ttk.Frame(genre_container)
-        self.genre_keywords_label = ttk.Label(self.genre_frame, text="Keywords:")
-        self.genre_keywords = ttk.Entry(self.genre_frame, width=25)
-        self.neighbors_label = ttk.Label(self.genre_frame, text="Number of Results:")
-        self.number_of_results_entry = ttk.Entry(self.genre_frame, width=10)
-
-        # Info text
-        info_text = ttk.Label(form_frame,
-                             text="Enter conditions: For the numeric attributes: enter min value in the left box and max value in the right box. For genres you can either seperate with commas (,) or with just with space. Dates are in YYYY-MM-DD format (e.g., 2005-12-31). Leave boxes empty for no limit.",
-                             wraplength=900, justify=tk.LEFT, foreground='#666')
-        info_text.pack(pady=10)
-
-        # Search Button
-        self.search_btn = tk.Button(form_frame, text="Search", command=self.search_movies,
-                                    bg='#4CAF50', fg='white', font=('Arial', 10, 'bold'),
-                                    cursor='hand2', padx=30, pady=8)
-        self.search_btn.pack(pady=15)
-
-        # ===== RESULTS SECTION =====
-        results_frame = ttk.LabelFrame(main_container,
-                                      text="Search results: You can tap on the headings to sort the table based on the attribute you want",
-                                      padding=10)
-        results_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # --- RESULTS SECTION ---
+        results_frame = ttk.Frame(main_container)
+        results_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        
+        results_lbl = ttk.Label(results_frame, text="Results", font=("Segoe UI", 11, "bold"), foreground=self.colors["accent"])
+        results_lbl.pack(anchor=tk.W, pady=(0,5))
 
         # Create Treeview for table
         columns = ('Origin Country', 'Budget', 'Popularity', 'Release Date', 'Genre', 'Revenue')
-        self.tree = ttk.Treeview(results_frame, columns=columns, show='tree headings', height=15)
+        self.tree = ttk.Treeview(results_frame, columns=columns, show='tree headings', height=10)
 
         columns_setup = [
-            ('#0', 'Title', tk.W),
-            ('Origin Country', 'Origin Country', tk.W),
-            ('Budget', 'Budget', tk.CENTER),
-            ('Popularity', 'Popularity', tk.CENTER),
-            ('Release Date', 'Release Date', tk.CENTER),
-            ('Genre', 'Genre', tk.W),
-            ('Revenue', 'Revenue', tk.CENTER)
+            ('#0', 'Title', tk.W, 250),
+            ('Origin Country', 'Country', tk.W, 100),
+            ('Budget', 'Budget', tk.CENTER, 100),
+            ('Popularity', 'Popularity', tk.CENTER, 80),
+            ('Release Date', 'Date', tk.CENTER, 100),
+            ('Genre', 'Genre', tk.W, 250),
+            ('Revenue', 'Revenue', tk.CENTER, 100)
         ]
 
-        for col_id, col_name, anchor_pos in columns_setup:
+        for col_id, col_name, anchor_pos, width in columns_setup:
             self.tree.heading(
                 col_id,
                 text=col_name,
                 anchor=anchor_pos,
-                # Το lambda c=col_id είναι απαραίτητο για να θυμάται τη σωστή στήλη
                 command=lambda c=col_id: self.sort_treeview_column(c, False)
             )
+            self.tree.column(col_id, width=width, anchor=anchor_pos)
 
-        # Define column widths
-        self.tree.column('#0', width=250, anchor=tk.W)
-        self.tree.column('Origin Country', width=120, anchor=tk.W)
-        self.tree.column('Budget', width=120, anchor=tk.CENTER)
-        self.tree.column('Popularity', width=100, anchor=tk.CENTER)
-        self.tree.column('Release Date', width=100, anchor=tk.CENTER)
-        self.tree.column('Genre', width=280, anchor=tk.W)
-        self.tree.column('Revenue', width=120, anchor=tk.CENTER)
-
-        # Add scrollbars
+        # Scrollbars
         vsb = ttk.Scrollbar(results_frame, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(results_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self.tree.configure(yscrollcommand=vsb.set)
 
-        # Grid layout
-        self.tree.grid(row=0, column=0, sticky='nsew')
-        vsb.grid(row=0, column=1, sticky='ns')
-        hsb.grid(row=1, column=0, sticky='ew')
-
-        results_frame.rowconfigure(0, weight=1)
-        results_frame.columnconfigure(0, weight=1)
+        # Layout Treeview
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Status bar
-        self.status_label = tk.Label(root, text="Ready", bd=1, relief=tk.SUNKEN,
-                                    anchor=tk.W, font=('Arial', 9))
+        self.status_label = tk.Label(root, text="Ready", bd=0, bg=self.colors["accent"], fg="white",
+                                    relief=tk.FLAT, anchor=tk.W, font=('Segoe UI', 9), padx=10, pady=5)
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
 
+    def create_filter_card(self, parent, title, row, col):
+        """Helper to create symmetric filter cards"""
+        card = ttk.Frame(parent, style="Card.TFrame", padding=10)
+        card.grid(row=row, column=col, sticky="nsew", padx=10, pady=10)
+        
+        # Header within card
+        header = ttk.Frame(card, style="Card.TFrame")
+        header.pack(fill=tk.X, anchor=tk.W)
+
+        # Logic Mapping based on title
+        if title == "Budget":
+            self.budget_var = tk.BooleanVar(value=False)
+            cb = ttk.Checkbutton(header, text=title.upper(), variable=self.budget_var, command=self.toggle_budget, style="TCheckbutton")
+            cb.pack(side=tk.LEFT)
+            
+            self.budget_frame = ttk.Frame(card, style="Card.TFrame")
+            self.budget_from_label = ttk.Label(self.budget_frame, text="Min", style="TLabel")
+            self.budget_min = ttk.Entry(self.budget_frame, width=12)
+            self.budget_to_label = ttk.Label(self.budget_frame, text="Max", style="TLabel")
+            self.budget_max = ttk.Entry(self.budget_frame, width=12)
+
+        elif title == "Popularity":
+            self.popularity_var = tk.BooleanVar(value=False)
+            cb = ttk.Checkbutton(header, text=title.upper(), variable=self.popularity_var, command=self.toggle_popularity, style="TCheckbutton")
+            cb.pack(side=tk.LEFT)
+
+            self.popularity_frame = ttk.Frame(card, style="Card.TFrame")
+            self.popularity_from_label = ttk.Label(self.popularity_frame, text="Min", style="TLabel")
+            self.popularity_min = ttk.Entry(self.popularity_frame, width=12)
+            self.popularity_to_label = ttk.Label(self.popularity_frame, text="Max", style="TLabel")
+            self.popularity_max = ttk.Entry(self.popularity_frame, width=12)
+
+        elif title == "Release Date":
+            self.date_var = tk.BooleanVar(value=False)
+            cb = ttk.Checkbutton(header, text=title.upper(), variable=self.date_var, command=self.toggle_date, style="TCheckbutton")
+            cb.pack(side=tk.LEFT)
+
+            self.date_frame = ttk.Frame(card, style="Card.TFrame")
+            self.date_from_label = ttk.Label(self.date_frame, text="Start", style="TLabel")
+            self.date_min = ttk.Entry(self.date_frame, width=12)
+            self.date_to_label = ttk.Label(self.date_frame, text="End", style="TLabel")
+            self.date_max = ttk.Entry(self.date_frame, width=12)
+
+        elif title == "Genre":
+            self.genre_var = tk.BooleanVar(value=False)
+            cb = ttk.Checkbutton(header, text=title.upper(), variable=self.genre_var, command=self.toggle_genre, style="TCheckbutton")
+            cb.pack(side=tk.LEFT)
+
+            self.genre_frame = ttk.Frame(card, style="Card.TFrame")
+            self.genre_keywords_label = ttk.Label(self.genre_frame, text="Key:", style="TLabel")
+            self.genre_keywords = ttk.Entry(self.genre_frame, width=15)
+            self.neighbors_label = ttk.Label(self.genre_frame, text="Num:", style="TLabel")
+            self.number_of_results_entry = ttk.Entry(self.genre_frame, width=5)
+
     def toggle_budget(self):
-        """Show/hide budget input fields"""
         if self.budget_var.get():
-            self.budget_frame.pack(side=tk.LEFT, padx=10)
-            self.budget_from_label.pack(side=tk.LEFT, padx=5)
-            self.budget_min.pack(side=tk.LEFT, padx=5)
-            self.budget_to_label.pack(side=tk.LEFT, padx=5)
-            self.budget_max.pack(side=tk.LEFT, padx=5)
+            self.budget_frame.pack(fill=tk.X, pady=(10, 0))
+            self.budget_from_label.pack(side=tk.LEFT, padx=(0,5))
+            self.budget_min.pack(side=tk.LEFT, padx=(0,10))
+            self.budget_to_label.pack(side=tk.LEFT, padx=(0,5))
+            self.budget_max.pack(side=tk.LEFT)
         else:
             self.budget_frame.pack_forget()
 
     def toggle_popularity(self):
-        """Show/hide popularity input fields"""
         if self.popularity_var.get():
-            self.popularity_frame.pack(side=tk.LEFT, padx=10)
-            self.popularity_from_label.pack(side=tk.LEFT, padx=5)
-            self.popularity_min.pack(side=tk.LEFT, padx=5)
-            self.popularity_to_label.pack(side=tk.LEFT, padx=5)
-            self.popularity_max.pack(side=tk.LEFT, padx=5)
+            self.popularity_frame.pack(fill=tk.X, pady=(10, 0))
+            self.popularity_from_label.pack(side=tk.LEFT, padx=(0,5))
+            self.popularity_min.pack(side=tk.LEFT, padx=(0,10))
+            self.popularity_to_label.pack(side=tk.LEFT, padx=(0,5))
+            self.popularity_max.pack(side=tk.LEFT)
         else:
             self.popularity_frame.pack_forget()
 
     def toggle_date(self):
-        """Show/hide date input fields"""
         if self.date_var.get():
-            self.date_frame.pack(side=tk.LEFT, padx=10)
-            self.date_from_label.pack(side=tk.LEFT, padx=5)
-            self.date_min.pack(side=tk.LEFT, padx=5)
-            self.date_to_label.pack(side=tk.LEFT, padx=5)
-            self.date_max.pack(side=tk.LEFT, padx=5)
+            self.date_frame.pack(fill=tk.X, pady=(10, 0))
+            self.date_from_label.pack(side=tk.LEFT, padx=(0,5))
+            self.date_min.pack(side=tk.LEFT, padx=(0,10))
+            self.date_to_label.pack(side=tk.LEFT, padx=(0,5))
+            self.date_max.pack(side=tk.LEFT)
         else:
             self.date_frame.pack_forget()
 
     def toggle_genre(self):
-        """Show/hide genre input fields"""
         if self.genre_var.get():
-            self.genre_frame.pack(side=tk.LEFT, padx=10)
-            self.genre_keywords_label.pack(side=tk.LEFT, padx=5)
-            self.genre_keywords.pack(side=tk.LEFT, padx=5)
-            self.neighbors_label.pack(side=tk.LEFT, padx=10)
-            self.number_of_results_entry.pack(side=tk.LEFT, padx=5)
+            self.genre_frame.pack(fill=tk.X, pady=(10, 0))
+            self.genre_keywords_label.pack(side=tk.LEFT, padx=(0,5))
+            self.genre_keywords.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,10))
+            self.neighbors_label.pack(side=tk.LEFT, padx=(0,5))
+            self.number_of_results_entry.pack(side=tk.LEFT)
         else:
             self.genre_frame.pack_forget()
 
     def update_status(self, message):
         """Update status bar"""
-        self.status_label.config(text=message)
+        self.status_label.config(text=f"  {message}")
         self.root.update_idletasks()
 
     def search_movies(self):
         """Execute movie search in a separate thread"""
-        self.search_btn.config(state='disabled', text="Searching...")
-        self.update_status("Executing search...")
+        self.search_btn.config(state='disabled', text="SEARCHING...")
+        self.update_status("Executing search algorithm...")
 
         # Clear previous results
         for item in self.tree.get_children():
@@ -279,22 +309,22 @@ class MovieSearchGUI:
         # Call search function
         tree_choice = self.tree_method_var.get()
 
-        if tree_choice == "Range Tree":
-            results = range_tree_main(conditions, genre_kw, num_of_results)
-
-        elif tree_choice == "Quad Tree":
-            results = movies_octree_main(conditions, genre_kw, num_of_results)
-
-        elif tree_choice == "K-D Tree":
-            results = kdtree_main(conditions, genre_kw, num_of_results)
-
-        elif tree_choice == "R-Tree":
-            results = r_tree_main(conditions, genre_kw, num_of_results)
-
-        else:
-            raise ValueError("No tree structure selected.")
-        # Display results in GUI thread
-        self.root.after(0, lambda: self.display_results(results))
+        try:
+            if tree_choice == "Range Tree":
+                results = range_tree_main(conditions, genre_kw, num_of_results)
+            elif tree_choice == "Quad Tree":
+                results = movies_octree_main(conditions, genre_kw, num_of_results)
+            elif tree_choice == "K-D Tree":
+                results = kdtree_main(conditions, genre_kw, num_of_results)
+            elif tree_choice == "R-Tree":
+                results = r_tree_main(conditions, genre_kw, num_of_results)
+            else:
+                raise ValueError("No tree structure selected.")
+            
+            # Display results in GUI thread
+            self.root.after(0, lambda: self.display_results(results))
+        except Exception as e:
+             self.root.after(0, lambda: self.show_error(str(e)))
 
     def display_results(self, results):
         """Display search results in the table"""
@@ -306,11 +336,8 @@ class MovieSearchGUI:
             self.update_status("No results found")
             messagebox.showinfo("No Results", "No movies found matching your criteria.")
         else:
-            for row in results:
-                # Extract data based on indices
-                # Index 1: title, Index 3: origin_country, Index 8: budget
-                # Index 11: popularity, Index 5: release_date, Index 6: genre_names, Index 9: revenue
-
+            for i, row in enumerate(results):
+                # Data extraction
                 title = str(row[1]) if len(row) > 1 else "N/A"
                 origin = str(row[3]).replace("['", "").replace("']", "") if len(row) > 3 else "N/A"
                 budget = f"${float(row[8]):,.0f}" if len(row) > 8 else "$0"
@@ -319,55 +346,50 @@ class MovieSearchGUI:
                 genre = str(row[6]) if len(row) > 6 else "N/A"
                 revenue = f"${float(row[9]):,.0f}" if len(row) > 9 else "$0"
 
-                # Insert into tree
+                # Tag logic for alternating colors
+                tag = 'even' if i % 2 == 0 else 'odd'
+                
                 self.tree.insert('', tk.END, text=title,
-                               values=(origin, budget, popularity, date, genre, revenue))
+                               values=(origin, budget, popularity, date, genre, revenue), tags=(tag,))
 
+            self.tree.tag_configure('odd', background=self.colors["light_gray"])
+            self.tree.tag_configure('even', background="white")
             self.update_status(f"Found {len(results)} movies")
 
         # Re-enable button
-        self.search_btn.config(state='normal', text="Search")
+        self.search_btn.config(state='normal', text="SEARCH MOVIES")
 
     def show_error(self, error_msg):
         """Show error message"""
         self.update_status("Error during search")
-        self.search_btn.config(state='normal', text="Search")
+        self.search_btn.config(state='normal', text="SEARCH MOVIES")
         messagebox.showerror("Error", f"An error occurred:\n{error_msg}")
 
     def sort_treeview_column(self, col, reverse):
         """Sort treeview content when a column header is clicked."""
-
-        # Λίστα με όλα τα στοιχεία (tuples): (τιμή, k_id)
         l = []
         for k in self.tree.get_children(''):
             if col == '#0':
-                # Η στήλη #0 (Title) παίρνεται με το .item(..., 'text')
                 val = self.tree.item(k, 'text')
             else:
-                # Οι υπόλοιπες στήλες παίρνονται με το .set(..., col)
                 val = self.tree.set(k, col)
             l.append((val, k))
 
-        # Συνάρτηση μετατροπής για σωστή σύγκριση (Handling numbers vs strings)
         def convert_value(value):
-            # Καθαρισμός από $, κόμματα και κενά
             clean_val = str(value).replace('$', '').replace(',', '').strip()
-
-            # Προσπάθεια μετατροπής σε αριθμό (float)
             try:
                 return float(clean_val)
             except ValueError:
-                # Αν δεν είναι αριθμός, επιστροφή ως κείμενο (πεζά για σωστή αλφαβητική σειρά)
                 return clean_val.lower()
 
-        # Ταξινόμηση της λίστας
         l.sort(key=lambda t: convert_value(t[0]), reverse=reverse)
 
-        # Αναδιάταξη των items στο Treeview
         for index, (val, k) in enumerate(l):
             self.tree.move(k, '', index)
+            # Re-apply striping
+            tag = 'even' if index % 2 == 0 else 'odd'
+            self.tree.item(k, tags=(tag,))
 
-        # Ενημέρωση του heading ώστε το επόμενο κλικ να κάνει την αντίστροφη ταξινόμηση
         self.tree.heading(col, command=lambda: self.sort_treeview_column(col, not reverse))
 
 

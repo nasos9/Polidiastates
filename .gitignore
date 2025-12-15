@@ -1,2 +1,3 @@
-data_movies_clean.xlsx
-data_movies_clean.csv
+*.xlsx
+*.csv
+__pycache__
