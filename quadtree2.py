@@ -186,28 +186,39 @@ def movies_octree_main(conditions, genre_keywords, num_of_results):
     # ============ QUERY TRANSFORMATION ============
     # Εδώ μετατρέπουμε τις ΠΡΑΓΜΑΤΙΚΕΣ τιμές του χρήστη σε NORMALIZED τιμές για το δέντρο
 
-    # 1. Budget Transform (Log scale)
-    raw_budget_range = conditions.get('budget', (-1, float('inf')))  # Default: Όλα
+    # Ορίζουμε ένα μικρό epsilon, λίγο μεγαλύτερο από το jitter που έβαλες (1e-9)
+    epsilon = 1e-8
+
+    # 1. Budget Transform
+    raw_budget_range = conditions.get('budget', (-1, float('inf')))
     b_min_q = raw_budget_range[0] if raw_budget_range[0] > 0 else 1
     b_max_q = raw_budget_range[1]
-
-    # Εφαρμόζουμε τον ίδιο τύπο: (log(x) - min) / (max - min)
     q_budget_min_norm = (np.log1p(b_min_q) - log_b_min) / (log_b_max - log_b_min)
     q_budget_max_norm = (np.log1p(b_max_q) - log_b_min) / (log_b_max - log_b_min)
 
-    # 2. Popularity Transform (Linear scale)
+    # --- ΔΙΟΡΘΩΣΗ: Επέκταση ορίων ---
+    q_budget_min_norm -= epsilon
+    q_budget_max_norm += epsilon
+
+    # 2. Popularity Transform
     raw_pop_range = conditions.get('popularity', (0, float('inf')))
     q_pop_min_norm = (raw_pop_range[0] - pop_min) / (pop_max - pop_min)
     q_pop_max_norm = (raw_pop_range[1] - pop_min) / (pop_max - pop_min)
 
-    # 3. Date Transform (Linear scale of YYYYMMDD)
+    # --- ΔΙΟΡΘΩΣΗ ---
+    q_pop_min_norm -= epsilon
+    q_pop_max_norm += epsilon
+
+    # 3. Date Transform
     raw_date_range = conditions.get('release_date', ('1900-01-01', '2100-01-01'))
-    # Μετατροπή string dates σε int
     d_min_int = convert_date_to_numeric(raw_date_range[0])
     d_max_int = convert_date_to_numeric(raw_date_range[1])
-
     q_date_min_norm = (d_min_int - date_min) / (date_max - date_min)
     q_date_max_norm = (d_max_int - date_min) / (date_max - date_min)
+
+    # --- ΔΙΟΡΘΩΣΗ ---
+    q_date_min_norm -= epsilon
+    q_date_max_norm += epsilon
 
     # Φτιάχνουμε τα τελικά όρια για το δέντρο
     range_min = [q_budget_min_norm, q_pop_min_norm, q_date_min_norm]
